@@ -1,3 +1,36 @@
+abcde 2.2.4
+
+  * Changed the way we call flac, to adapt to the new times:
+    --import-vc-from= to --import-tags-from.
+  * DOSPLAYLIST was not included in the list of options.
+  * Options passed to the encoder by using <-o ogg:"-b 192"> are now
+    supported. One can modify the way abcde encodes just for the current CD.
+
+ -- Jesus Climent <jesus.climent@hispalinux.es>  Mon, 21 Feb 2005 14:42:57 +0200
+
+abcde 2.2.3
+
+  * debian/control
+    - suggest normalize-audio, since it changed its name (Closes: #287674).
+  * Use the default while erasing an existing playlist (Closes: #288835).
+  * Does not destroy track information when a track contains "=" in the name
+    (Closes: #290709).
+
+ -- Jesus Climent <jesus.climent@hispalinux.es>  Sat, 22 Jan 2005 15:35:46 +0200
+
+abcde 2.2.2
+
+  * Quotes missing when evaluating a value (Closes: #284018).
+
+ -- Jesus Climent <jesus.climent@hispalinux.es>  Fri,  3 Dec 2004 09:20:18 +0200
+
+abcde 2.2.1
+
+  * Spotted and solved a problem with the way the data tracks were detected
+    (Closes: #282647, #280597).
+
+ -- Jesus Climent <jesus.climent@hispalinux.es>  Mon, 29 Nov 2004 00:55:03 +0200
+
 abcde 2.2.0
 
   * New release! Let's see if abcde 2.2 gets into Sarge.
