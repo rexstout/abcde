@@ -1,3 +1,20 @@
+abcde 2.1.21
+
+  * Changed normalize with normalize-audio (Closes: #267053). Carefull! this
+    might be a debian-only problem...
+
+ -- Jesus Climent <jesus.climent@hispalinux.es>  Fri, 20 Aug 2004 13:16:46 +0000
+
+abcde 2.1.20
+
+  * The "Let's have a good abcde in Sarge" release.
+  * The mungefile() function changes * with + by default to avoid creating
+    directories with the start expanded to the files found in the current
+    directory. abcde2.2 will most likelly contain a better workaround.
+  * Correct default OUTPUTFORMAT in man page (Closes: #250649)
+
+ -- Jesus Climent <jesus.climent@hispalinux.es>  Fri, 30 Jul 2004 10:16:46 +0300
+
 abcde 2.1.19
 
   * Encoding the whole CD in one file is now possible. Use "-1" as a flag

@@ -2,11 +2,11 @@ ABCDE
 =====
 
 abcde is a frontend command-line utility (actually, a shell script) that
-grabs tracks off a CD, encodes them to Ogg/Vorbis, MP3, FLAC, Ogg/Speex and/or
-MPP/MP+(Musepack) format, and tags them, all in one go.
+grabs tracks off a CD, encodes them to Ogg/Vorbis, MP3, FLAC or Ogg/Speex
+format, and tags them, all in one go.
 
-Your finished Ogg/MP3/FLAC/Speex/MPP's are, by default, stored in a subdirectory 
-of the current directory (named after the artist) with a filename based on the
+Your finished Ogg/MP3/FLAC/Speex's are, by default, stored in a subdirectory of 
+the current directory (named after the artist) with a filename based on the
 track title. Spaces are replaced by underscores, and apostrophes and
 control codes are filtered out. Colons are replaced with an underscore and a
 hyphen. The end result usually looks like: Our_Lady_Peace/01.Supermans_Dead.ogg
@@ -24,7 +24,8 @@ Low on disk space? abcde has different algorithms to schedule ripping and
 encoding - to optimize for disk conservation, use -l.
 
 abcde can also take advantage of SMP systems, just like make. Try
-'abcde -j 2' - it'll run two encoder jobs while it rips the next track.
+'abcde -j 2' - it'll run two encoder jobs while it rips the next
+track.
 
 abcde now uses FreeDB by default. To use a different FreeDB mirror or
 another CDDB service, change the CDDBURL option in your abcde.conf.
@@ -51,32 +52,10 @@ http://www.hispalinux.es/~data/files/cd-discid/
 
 MAJOR CHANGES
 =============
-Changes in 2.2-pre2:
+Changes in 2.1.20:
 
-* Support for MPP/MP+(Musepack) format. It can be downloaded from 
-  corecodecs.org. It is supposed to be Free (not only free), and released
-  under the GPL...
-* New "-s <number>" option for starting the numbering of the output files at 
-  a given starting number. Ideal for albums with more than one CD.
-* Support for keeping an existing playlist (and not add new entries to it),
-  erase the existing one (overwrite) or append new entries to the existing
-  one.
-* Under ./examples you will find a very basic way to make abcde run in the
-  background and start a non-interactive rip of a CD, if it can find an
-  audio CD in the tray.
-  The abcded script depends on eject and cdparanoia being installed in your
-  system.
-* New mungegenre function to switch off (or modify) the default behaviour of
-  transforming uppercase characters to lowercase.
-* No network but you have been using abcde with local CDDB storage before?
-  Use -f and it will try the local CDDB and fallback to an empty template.
-
-Changes in 2.2-pre1:
-
-* cdparanoia permits performing a query to the CD drive and obtain a list of 
-  valid audio tracks. So, now we perform such query and process the results.
-* Support for "None of the above" has been added with the "0" selection. A 
-  template is created, and the selection to edit it is defaulted to "y".
+* The mungefile() function noe strips out stars (*) in the album name for
+  creating the directory and the files.
 
 New options in 2.1.19:
 
@@ -139,9 +118,9 @@ Options added/modified from 2.1.1 to 2.1.3:
 
 Options added/modified from 2.0.3 to 2.1.x:
 
-* -b use batch processing. It uses normalize-audio to adjust the volume of 
-  the songs, and a -g gapless option from lame to remove gaps. Only available
-  for mp3+lame combination.
+* -b use batch processing. It uses normalize-audio to adjust the volume of
+  the songs, and a -g gapless option from lame to remove gaps. Only 
+  available for mp3+lame combination.
 * a new "normalize" option has been added to -a, to normalize the volume.
 * -o works now with a combination of the different outputs: ogg, mp3, flac.
   Combine them separated by ",". Example: "-o ogg,flac".
@@ -188,8 +167,7 @@ abcde requires the following backend tools to work:
   You can get a trial version of mp3enc at:
     http://www.iis.fhg.de/amm/download/ or:
 * FLAC encoder (flac) or:
-* Ogg/Speex encoder (speexenc) or:
-* MPP/MP+(Musepack) encoder (mppenc)
+* Ogg/Speex encoder (speexenc)
 * normalize-audio for volume normalization.
 * CD Paranoia, an audio CD reading utility,
 * Or cdda2wav, the audio CD reading utility cdparanoia was born from,

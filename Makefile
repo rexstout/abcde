@@ -1,4 +1,4 @@
-VERSION = 2.1pre2.2.0
+VERSION = 2.1.21
 INSTALL = /usr/bin/install -c
 
 # Installation directories
@@ -24,5 +24,5 @@ install:
 
 tarball:
 	@cd .. && tar czvf abcde_$(VERSION).orig.tar.gz \
-		abcde-$(VERSION)/{Makefile,COPYING,README,TODO,FAQ,abcde,abcde.1,abcde.conf,changelog,cddb-tool,cddb-tool.1,examples/}
+		abcde-$(VERSION)/{Makefile,COPYING,README,TODO,FAQ,abcde,abcde.1,abcde.conf,changelog,cddb-tool,cddb-tool.1}
 
