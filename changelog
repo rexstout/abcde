@@ -1,12 +1,12 @@
-abcde 2.2pre1
+abcde (2.1.20-1) unstable; urgency=low
 
-  * DATA tracks are now excluded from the ripping process using internally
-    the cdparanoia "-Q" query option. If using another ripper, it does not
-    work (at least there is no support for them in abcde) (Closes: #112692).
-  * New "0" choice for "None of the above" has been introduced. If selected, a
-    template is created and the user encouraged to edit it (Closes: #147683).
+  * The "Let's have a good abcde in Sarge" release.
+  * The mungefile() function changes * with + by default to avoid creating
+    directories with the start expanded to the files found in the current
+    directory. abcde2.2 will most likelly contain a better workaround.
+  * Correct default OUTPUTFORMAT in man page (Closes: #250649)
 
- -- Jesus Climent <jesus.climent@hispalinux.es>  Mon, 12 Apr 2004 18:03:36 +0000
+ -- Jesus Climent <jesus.climent@hispalinux.es>  Fri, 30 Jul 2004 10:16:46 +0300
 
 abcde 2.1.19
 
