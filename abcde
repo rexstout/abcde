@@ -11,7 +11,7 @@
 # Copyright for this work is to expire January 1, 2010, after which it
 # shall be public domain.
 
-VERSION="2.2.4"
+VERSION="2.2.3"
 
 usage ()
 {
@@ -42,7 +42,7 @@ echo "-m     Modify playlist to include CRLF endings, to comply with some player
 echo "-o <type1[,type2]...>"
 echo "       Output file type(s) (ogg,mp3,flac,spx,mpc). Defaults to ogg"
 echo "-p     Pad track numbers with 0's (if less than 10 tracks)"
-echo "-P     Use UNIX pipes to read+encode without wav files"
+#echo "-P    Use UNIX pipes to read+encode without wav files"
 echo "-r <host1[,host2]...>"
 echo "       Also encode on these remote hosts"
 echo "-R     Add replaygain values to the tag info (only for ogg,flac)"
@@ -358,7 +358,7 @@ do_tag ()
 				*)   echo COMMENT="$COMMENTOUTPUT";;
 			esac	
 		fi
-                ) | run_command tagtrack-$1 $METAFLAC --import-tags-from=- --no-utf8-convert "$ABCDETEMPDIR/track$1.$OUTPUT"
+                ) | run_command tagtrack-$1 $METAFLAC --import-vc-from=- --no-utf8-convert "$ABCDETEMPDIR/track$1.$OUTPUT"
 		;;
 	spx)
 		run_command tagtrack-$1 true
@@ -737,6 +737,9 @@ do_playlist ()
 			if [ "$INTERACTIVE" = "y" ]; then
 				while [ "$DONE" != "y" ]; do
 					read ERASEPLAYLIST
+					if [ "$ERASEPLAYLIST" = "" ]; then
+						ERASEPLAYLIST=e
+					fi
 					case $ERASEPLAYLIST in
 						e|E|a|A|k|K) DONE=y ;;
 						*) ;;
@@ -1354,7 +1357,7 @@ do_cddbedit ()
 		EDITCDDB=n
 	fi
 	if [ "$EDITCDDB" = "y" ]; then
-		CDDBDATAMD5SUM=$($MD5SUM "$CDDBDATA" | cut -d " " -f 1);
+		CDDBDATAMD5SUM=$($MD5SUM "$CDDBDATA" | cut -d" " -f1);
 		
 		# Use the debian sensible-editor wrapper to pick the editor that the
 		# user has requested via their $EDITOR environment variable
@@ -1387,7 +1390,7 @@ do_cddbedit ()
 
 	# Some heuristics first. Look at Disc Title, and if it starts with
 	# "Various", then we'll assume Various Artists
-	if [ "$(grep ^DTITLE= "$CDDBDATA" | cut -f2 -d= | egrep -ci '^(various|soundtrack|varios|sonora|ost)')" != "0" ]; then
+	if [ "$(grep ^DTITLE= "$CDDBDATA" | cut -f2- -d= | egrep -ci '^(various|soundtrack|varios|sonora|ost)')" != "0" ]; then
 		echo "Looks like a Multi-Artist CD" >&2
 		VARIOUSARTISTS=y
 	else
@@ -1470,7 +1473,7 @@ do_cddbedit ()
 	echo "variousartiststyle=$VARIOUSARTISTSTYLE" >> "$ABCDETEMPDIR/status"
 
 	if [ "$EDITCDDB" = "y" ] && [ "$UNINTENTIONALLY_ANGER_THE_FREEDB_PEOPLE" = "y" ]; then
-		if [ $CDDBDATAMD5SUM != "" ]  && [ $CDDBDATAMD5SUM != $($MD5SUM "$CDDBDATA" | cut -d " " -f 1) ]; then
+		if [ $CDDBDATAMD5SUM != "" ]  && [ $CDDBDATAMD5SUM != $($MD5SUM "$CDDBDATA" | cut -d" " -f1) ]; then
 			# This works but does not have the necessary error checking
 			# yet. If you are familiar with the CDDB spec
 			# (see http://www.freedb.org/src/latest/DBFORMAT) 
@@ -1567,49 +1570,20 @@ do_cdread_one ()
 }
 
 # do_cdread [tracknumber]
-# do_cdread onetrack [firsttrack] [lasttrack]
 # 
 do_cdread ()
 {
 	# The commands here don't go through run_command because they're never supposed to be silenced
 	# return codes need to be doublechecked anyway, however
-	if [ "$1" = "onetrack" ]; then
-		# FIXME # Add the possibility of grabbing ranges of tracks in onetrack
-		# FIXME # Until then, we grab the whole CD in one track, no matter what the user said
-		# We need the first and last track for cdda2wav
-		FIRSTTRACK=$2
-		LASTTRACK=$3
-		case "$CDROMREADERSYNTAX" in
-			cdparanoia) UTRACKNUM="1-" ;;
-			cdda2wav) UTRACKNUM="1+$LASTRACK" ;;
-			*) echo "abcde error: $CDROMREADERSYNTAX does not support ONETRACK mode"
-			   exit 1 ;;
-		esac
-	else
-		UTRACKNUM=$1
-	fi
+	UTRACKNUM=$1
 	CDDBTRACKNUM=$(expr $UTRACKNUM - 1)
 	WAVDATA="$ABCDETEMPDIR/track$UTRACKNUM.wav"
+	OUTDATA="$ABCDETEMPDIR/track$UTRACKNUM.$OUTPUTTYPE"
 	if [ -r "$CDDBDATA" ]; then
-		TRACKNAME=$(grep ^TTITLE$CDDBTRACKNUM= "$CDDBDATA" | head -n 1 | cut -f2 -d= | tr -d \[:cntrl:\])
+		TRACKNAME=$(grep ^TTITLE$CDDBTRACKNUM= "$CDDBDATA" | head -n 1 | cut -f2- -d= | tr -d \[:cntrl:\])
 		echo "Grabbing track $UTRACKNUM: $TRACKNAME..." >&2
 	else
 		echo "Grabbing track $UTRACKNUM..." >&2
-	fi
-	if [ "$USEPIPES" = "y" ]; then
-		TEMPARG="PIPE_$CDROMREADERSYNTAX"
-		FILEARG=${!TEMPARG}
-		REDIR=""
-	else
-		case "$CDROMREADERSYNTAX" in
-			dagrab)
-				FILEARG="-f $WAVDATA"
-				;;
-			*)
-				FILEARG=$WAVDATA
-				;;
-		esac
-		REDIR=">&2"
 	fi
 	case "$CDROMREADERSYNTAX" in
 		cdparanoia) nice $READNICE $CDROMREADER -d $CDROM $UTRACKNUM "$WAVDATA" >&2 ;;
@@ -1651,18 +1625,10 @@ do_cdread ()
 		if [ "$RETURN" = "0" -a ! -s "$WAVDATA" ]; then
 			RETURN=73 # fake a return code as cdparanoia return 0 also on aborted reads
 		fi
-		if [ "$USEPIPES" = "y" ]; then
-			echo "readencodetrack-$UTRACKNUM: $CDROMREADER returned code $RETURN" >> "$ABCDETEMPDIR/errors"
-		else
-			echo "readtrack-$UTRACKNUM: $CDROMREADER returned code $RETURN" >> "$ABCDETEMPDIR/errors"
-		fi
+                echo "readtrack-$UTRACKNUM: $CDROMREADER returned code $RETURN" >> "$ABCDETEMPDIR/errors"
 		return $RETURN
 	else
-		if [ "$USEPIPES" = "y" ]; then
-			echo readencodetrack-$UTRACKNUM >> "$ABCDETEMPDIR/status"
-		else
-			echo readtrack-$UTRACKNUM >> "$ABCDETEMPDIR/status"
-		fi
+		echo readtrack-$UTRACKNUM >> "$ABCDETEMPDIR/status"
 	fi
 }
 
@@ -1901,7 +1867,7 @@ fi
 
 # Parse command line options
 #while getopts 1a:bc:C:d:Dhj:klLnNo:pr:S:t:T:vVx opt ; do
-while getopts 1a:A:bc:C:d:Dhj:klLnNo:pPr:Rs:S:t:T:vVxw:W: opt ; do
+while getopts 1a:A:bc:C:d:Dhj:klLnNo:pr:Rs:S:t:T:vVxw:W: opt ; do
 	case "$opt" in
 		1) ONETRACK=y ;;
 		a) ACTIONS="$OPTARG" ;;
@@ -1949,21 +1915,18 @@ done
 
 shift $(($OPTIND - 1))
 
-# Decide if we can continue.
-if [ "$ONETRACK" = "y" ]; then 
-	# FIXME # remove check as soon as we find out about the other readers
+# Decide if we can continue. TO_REMOVE as soon as we find out about dagrab
+if [ "$ONETRACK" = "y" ] ; then 
 	case "$CDROMREADERSYNTAX" in
-		dagrab|cddafs|debug) echo "abcde error: ONETRACK reading is not suported with "$CDROMREADERSYNTAX" yet"
-			                 exit 1 ;;
+		dagrab|debug) echo "abcde error: ONETRACK reading is not suported with "$CDROMREADERSYNTAX" yet"
+			      exit 1 ;;
 	esac
 	if [ "$BATCH" = "y" ]; then
 		echo "abcde error: BATCH mode is not compatible with ONETRACK mode"
-		BATCH=n
 	fi
 	# It does not matter how many tracks we want. In ONETRACK mode we grab them all
-	# FIXME # allow ranges of tracks to be selected for onetrack ripping
 	if [ $# -gt 0 ]; then
-		vecho "abcde warning: ONETRACK mode selected, grabbing all tracks..."
+		vecho "ONETRACK mode selected: grabbing all tracks..."
 	fi
 else
 	while [ $# -gt 0 ]; do
@@ -2031,26 +1994,6 @@ if [ "$CDROM" != "" ] ; then
 else
 	echo "abcde error: CDROM has not been defined or cannot be found" >&2
 	exit 1
-fi
-
-# USEPIPES is not compatible with:
-# - multiple outputs
-# - normalize
-# - anything else?
-if [ "$USEPIPES" = "y" ]; then
-	if [ $(echo $OUTPUTTYPE | tr , \  | wc -w ) -gt 1 ]; then
-		echo "abcde error: Unix pipes not compatible with multiple outputs"
-		exit 1
-	fi
-	if [ "$DONORMALIZE" = "y" ]; then
-		echo "abcde error: Unix pipes not compatible with normalizer"
-		# FIXME # Do we need to exit or shall we just disable the mode?
-		exit 1
-	fi
-	if [ "$DOENCODE" = "n" ]; then
-		vecho "Disabling Unix pipes since we are not encoding!"
-		USEPIPES=n
-	fi
 fi
 
 # Decide which CDROM reader we're gonna use
@@ -2271,7 +2214,7 @@ fi
 
 (
 
-if [ ! "$ONETRACK" = "y" ]; then
+if [ "$ONETRACK" = "y" ]; then :; else
 	if [ "$DOPLAYLIST" = "y" ]; then
 		echo Creating playlist... >&2
 		do_playlist
@@ -2290,23 +2233,13 @@ if [ "$ONETRACK" = "y" ]; then
 	for UTRACKNUM in $TRACKQUEUE; do :;done
 	if checkstatus readtrack-$FIRSTTRACK; then :; else
 		do_cdread_one $UTRACKNUM $FIRSTTRACK
-		# FIXME # Allow ranges of tracks to be encoded in one track
-		# FIXME # do_cdread onetrack $FIRSTTRACK $UTRACKNUM
-		# Until we have it we must use:
-		#do_cdread onetrack $FIRSTTRACK $UTRACKNUM
 	fi
 else
 	for UTRACKNUM in $TRACKQUEUE
 	do
 		if [ "$DOREAD" = "y" ]; then
-			if [ "$USEPIPES" = "y" ]; then
-				if checkstatus readencodetrack-$UTRACKNUM; then :; else
-					do_cdread $UTRACKNUM | do_encode $UTRACKNUM %local0%
-				fi
-			else
-				if checkstatus readtrack-$UTRACKNUM; then :; else
-					do_cdread $UTRACKNUM
-				fi
+			if checkstatus readtrack-$UTRACKNUM; then :; else
+				do_cdread $UTRACKNUM
 				if [ "$?" != "0" ]; then
 					# CD read failed - don't give the goahead to
 					# the encoder
@@ -2436,7 +2369,7 @@ do
 	read GOAHEAD # For blocking - will contain either "NO" or "NEXTTRACK"
 	if [ "$GOAHEAD" = "NO" ]; then break; fi
 	# find out where this track is to be encoded
-	if [ "$DOENCODE" = "y" -a "$USEPIPES" != "y" ]; then
+	if [ "$DOENCODE" = "y" ]; then
 		# Make sure we have a place to encode this, if not, exit stage right
 		if [ -z "$ENCODELOCATIONS" ]; then
 			continue
@@ -2485,7 +2418,7 @@ do
 #			TRACKNUM=$(printf %0.${TRACKNUMPADDING}d $(expr ${UTRACKNUM} + 0))
 			TRACKNUM=$UTRACKNUM
 		        CDDBTRACKNUM=$(expr $UTRACKNUM - 1)
-			TRACKNAME=$(grep ^TTITLE$CDDBTRACKNUM= "$CDDBDATA" | cut -f2 -d= | tr -d \[:cntrl:\] | sed 's/\ \+$//')
+			TRACKNAME=$(grep ^TTITLE$CDDBTRACKNUM= "$CDDBDATA" | cut -f2- -d= | tr -d \[:cntrl:\] | sed 's/\ \+$//')
 			splitvarious
 		fi
 	fi
@@ -2569,6 +2502,3 @@ else
 fi
 )
 exit 0
-
-# b:is_bash
-# vim:tabstop=4
