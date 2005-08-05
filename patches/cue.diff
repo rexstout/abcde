@@ -1,0 +1,77 @@
+Index: abcde
+===================================================================
+--- abcde	(revisjon 73)
++++ abcde	(arbeidskopi)
+@@ -1203,12 +1203,6 @@
+ 		fi
+ 		cat /dev/null > "$ABCDETEMPDIR/status"
+ 	fi
+-	if [ X"$CUEFILE" = "Xy" -a X"$WEHAVEACD" = "Xy" ]; then
+-		if checkstatus cuefile ; then :; else
+-			$MKCUE $MKCUEOPTS > $ABCDETEMPDIR/cue-$(echo $TRACKINFO | cut -f1 -d' ').txt
+-			echo cuefile >> "$ABCDETEMPDIR/status"
+-		fi
+-	fi
+ 	# If we got the CDPARANOIA status and it is not recorded, save it now
+ 	if [ -n "$CDPARANOIAAUDIOTRACKS" ]; then
+ 		if checkstatus cdparanoia-audio-tracks; then :; else
+@@ -1222,6 +1216,48 @@
+ 	echo "$TRACKINFO" > "$ABCDETEMPDIR/discid"
+ }
+ 
++# not
++# Negates the arguments
++not ()
++{
++	if $@
++	then
++		return 1
++	else
++		return 0
++	fi
++}
++
++# do_mkcue
++# Runs mkcue, filling in track titles if CDDB is enabled.
++do_mkcue ()
++{
++	if not checkstatus cuefile; then
++		mkcue_out="$ABCDETEMPDIR/cue-$(echo $TRACKINFO | cut -f1 -d' ').txt"
++		if [ "$DOCDDB" = "y" ]; then
++			# FIXME It doesn't preserve spaces! Why?
++			# FIXME parse $track into PERFORMER and TITLE - abcde already has code for this?
++			n=1
++			echo "PERFORMER \"$DARTIST\"" >> "$mkcue_out"
++			echo "TITLE \"$DALBUM\"" >> "$mkcue_out"
++			$MKCUE $MKCUEOPTS | while read line
++			do
++				if echo "$line" | grep -q "INDEX"
++				then
++					eval track="\$TRACK$n"
++					n=$(expr $n + 1)
++					echo "TITLE \"$track\"" >> "$mkcue_out"
++				fi
++				echo "$line" >> "$mkcue_out"
++			done
++		else
++			$MKCUE $MKCUEOPTS > "$mkcue_out"
++		fi
++		
++		echo cuefile >> "$ABCDETEMPDIR/status"
++	fi
++}
++
+ # do_cddbparse
+ # Parses a CDDB file and outputs the title and the track names.
+ # Variables: CDDBFILE
+@@ -2567,6 +2603,10 @@
+ 	eval $($CDDBTOOL parse "$CDDBDATA")
+ fi
+ 
++if [ X"$CUEFILE" = "Xy" -a X"$WEHAVEACD" = "Xy" ]; then
++	do_mkcue
++fi
++
+ # Before reading tracks, we set the speed of the device
+ 
+ if [ X"$CDSPEEDVALUE" != "X" ]; then
