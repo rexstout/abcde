@@ -1,0 +1,124 @@
+Index: abcde
+===================================================================
+--- abcde	(revision 11)
++++ abcde	(working copy)
+@@ -38,6 +38,7 @@
+ echo "-o    Output file type(s) (ogg,mp3,flac,spx,mpc). Defaults to ogg"
+ echo "-p    Pad track numbers with 0's (if less than 10 tracks)"
+ echo "-r    [host1,host2...] Also encode on these remote hosts"
++echo "-R    Add replay-gain to the tag if the format supports it (flac, ogg)"
+ echo "-s    Start the track numbering at a given number"
+ echo "-S    Set the CD speed (if possible)"
+ #echo "-t    File types to preprocess (wav)"
+@@ -1722,6 +1723,7 @@
+ METAFLAC=metaflac
+ NORMALIZE=normalize
+ CDSPEED=eject
++VORBISGAIN=vorbisgain
+ 
+ # Options for programs called from abcde
+ # mp3
+@@ -1851,7 +1853,7 @@
+ 
+ # Parse command line options
+ #while getopts 1a:bc:C:d:Dhj:klLnNo:pr:S:t:T:vVx opt ; do
+-while getopts 1a:bc:C:d:Dhj:klLnNo:pr:s:S:vVx opt ; do
++while getopts 1a:bc:C:d:Dhj:klLnNo:pr:Rs:S:vVx opt ; do
+ 	case "$opt" in
+ 		1) ONETRACK=y ;;
+ 		a) ACTIONS="$OPTARG" ;;
+@@ -1873,6 +1875,7 @@
+ 		o) OUTPUTTYPE="$OPTARG" ;;
+ 		p) PADTRACKS="y" ;;
+ 		r) REMOTEHOSTS="$OPTARG" ;;
++		R) REPLAYGAIN=y ;;
+ 		s) STARTTRACKNUMBER="$OPTARG" ;;
+ 		S) CDSPEEDVALUE="$OPTARG" ;;
+ 		t) PREPROCESSFORMATS="$OPTARG"
+@@ -1975,6 +1978,7 @@
+ 	case $OUTPUT in
+ 		ogg)  [ "$OGGENCODERSYNTAX" = "default" ] && OGGENCODERSYNTAX=oggenc
+ 		      echo $ACTIONS | grep tag > /dev/null 2>&1 && NEEDCOMMENTER=y
++		      if [ "$REPLAYGAIN" = "y" ]; then NEEDVORBISGAIN=y; fi 
+ 			;;
+ 		mp3)  [ "$MP3ENCODERSYNTAX" = "default" ] && MP3ENCODERSYNTAX=lame
+ 		      echo $ACTIONS | grep tag > /dev/null 2>&1 && NEEDTAGGER=y
+@@ -2081,14 +2085,17 @@
+ 	esac
+ fi
+ 
++if [ "$REPLAYGAIN" = "y" ]; then STRIPDATATRACKS=y; fi
+ 
++
+ # Make sure a buncha things exist
+ for X in $CDROMREADER $CDDISCID ${NEEDTAGGER+$TAGGER} $MP3ENCODER \
+ 	$OGGENCODER $FLACENCODER $SPEEXENCODER $MPPENCODER \
+ 	${NEEDHTTPGET+$HTTPGET} ${NEEDDISTMP3+$DISTMP3} \
+ 	${NEEDCOMMENTER+$VORBISCOMMENT} ${NEEDMETAFLAC+$METAFLAC} \
+ 	${NEEDNORMALIZER+$NORMALIZER} ${NEEDEJECT+$EJECT} \
+-	${NEEDDISKTOOL+disktool} ${NEEDCDSPEED+$CDSPEED}
++	${NEEDDISKTOOL+disktool} ${NEEDCDSPEED+$CDSPEED} \
++	${NEEDVORBISGAIN+$VORBISGAIN}
+ do
+ 	# Cut off the command-line options we just added in
+ 	X=$(echo $X | cut -d' ' -f2)
+@@ -2449,6 +2456,59 @@
+ fi
+ # If the above didn't catch the stragglers, this will
+ wait
++
++# all of the encoding should be done, add-replay gain to the formats that support if (flac, ogg)
++# varibables used:
++# TRACKNUM, TRACKNAME, TRACKARTIST, DALBUM, OUTPUTFORMAT, CDGENRE,
++# OUTPUTTYPE, TRACKFILES, OUTPUT
++if [ "$REPLAYGAIN" = "y" ]; then  	
++	
++	echo "Adding Replay-gain ...";	
++	
++	# figure out which files we need to apply replay-gain to
++	for OUTPUT in $(echo $OUTPUTTYPE | tr , \ )
++	do
++		
++		OUTPUTFILES="";
++		for UTRACKNUM in $TRACKQUEUE
++		do
++			# Shares some code with do_move since the filenames have to match
++			CDDBTRACKNUM=$(expr $UTRACKNUM - 1)
++			TRACKNAME=$(grep ^TTITLE$CDDBTRACKNUM= "$CDDBDATA" | head -n 1 | cut -f2 -d= | tr -d \[:cntrl:\])
++			splitvarious
++			TRACKFILE=$(mungefilename "$TRACKNAME")
++			ARTISTFILE=$(mungefilename "$TRACKARTIST")
++			ALBUMFILE=$(mungefilename "$DALBUM")
++			# If we want to start the tracks with a given number, we need to modify the
++			# TRACKNUM value before evaluation
++			if [ -n "$STARTTRACKNUMBER" ] ; then
++				# Get the trackpadding from the current track
++				CURRENTTRACKPADDING=$(echo -n $UTRACKNUM | wc -c)
++				TRACKNUM=$( printf %0.${CURRENTTRACKPADDING}d $(expr ${UTRACKNUM} + ${STARTTRACKNUMBER} - 1 ))
++			else
++				TRACKNUM=${UTRACKNUM}
++			fi
++			if [ "$VARIOUSARTISTS" = "y" ]; then
++				OUTPUTFILE=$(eval echo $VAOUTPUTFORMAT)
++			else
++				OUTPUTFILE=$(eval echo $OUTPUTFORMAT)
++			fi
++			
++			OUTPUTFILES="$OUTPUTDIR/$OUTPUTFILE.$OUTPUT $OUTPUTFILES"; 
++		done
++	
++		case "$OUTPUT" in
++		flac)
++			run_command replaygain $METAFLAC --add-replay-gain $OUTPUTFILES
++			;;
++		ogg)
++			run_command replaygain $VORBISGAIN --album $OUTPUTFILES
++			;;
++		esac
++	echo "replaygaincomplete" >> "$ABCDETEMPDIR/status"
++	done
++fi
++
+ # Check to see if run_command logged any errors
+ if [ -f "$ABCDETEMPDIR/errors" ]; then
+ 	echo "The following commands failed to run:"
