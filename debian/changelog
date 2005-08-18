@@ -1,11 +1,3 @@
-abcde (2.3.99-1) unstable; urgency=low
-
-  * Added diff choice to CDDB entries ("1,4").
-  * Added SHOWCDDBFIELDS to allow the user to show YEAR and GENRE in the
-    parsed CDDB output.
-
- -- Jesus Climent <jesus.climent@hispalinux.es>  Sat, 13 Aug 2005 03:26:59 +0300
-
 abcde (2.3.1-1) unstable; urgency=low
 
   * The new "I knew there were going to be bugs" upstream release!
@@ -45,10 +37,8 @@ abcde (2.3.0-1) unstable; urgency=low
   * Added CDPARANOIACDROMBUS option to define -d in case of using IDE and SCSI
     in case of using ide-scsi emulation layer (Closes: #290768).
   * Define metaflac in abcde.conf (Closes: #303555)
-  * Added the default "-f" option to the configuration file, to represent the
-    actual default option.
 
- -- Jesus Climent <jesus.climent@hispalinux.es>  Thu, 11 Aug 2005 00:47:27 +0300
+ -- Jesus Climent <jesus.climent@hispalinux.es>  Wed, 10 Aug 2005 07:00:26 +0300
 
 abcde (2.2.6-1) unstable; urgency=low
 

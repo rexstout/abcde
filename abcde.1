@@ -116,10 +116,6 @@ the REMOTEHOSTS configuration variable.
 Add replaygain information to the id3 or tag information for play
 normalization. Only works with MP3 and Ogg/Vorbis.
 .TP
-.B \-s [fields...]
-List, separated by comas, the fields to be shown in the CDDB parsed entries.
-Right now it only uses "year" and "genre".
-.TP
 .B \-S [speed]
 Set the speed of the CD drive. Needs CDSPEED and CDSPEEDOPTS set properly
 and both the program and device must support the capability.
@@ -200,10 +196,6 @@ Store local copies of the CDDB entries under the $CDDBLOCALDIR directory.
 Actually use the stored copies of the CDDB entries. Can be overriden using the 
 "-L" flag (if is CDDBUSELOCAL in "n"). If an entry is found, we always give 
 the choice of retrieving a CDDB entry from the internet.
-.TP
-.B SHOWCDDBFIELDS
-Coma-separated list of fields we want to parse during the CDDB parsing.
-Defaults to "year,genre".
 .TP
 .B OGGENCODERSYNTAX
 Specifies the style of encoder to use for the Ogg/Vorbis encoder. Valid options 
@@ -394,12 +386,6 @@ for the first time, during abcde execution. It can be used to close the CDROM
 tray, to set its speed (via "setcd" or via "eject", if available) and other
 preparation actions. The default function is empty.
 .TP
-.B post_read
-post_read () is a shell function which is executed after the CDROM is read
-(and, if applies, before the CDROM is ejected). It can be used to read a TOC
-from the CDROM, or to try to read the DATA areas from the CD (if any exist).
-The default function is empty.
-.TP
 .B EJECTCD
 If set to "y", abcde will call eject(1) to eject the cdrom from the drive
 after all tracks have been read.
@@ -409,7 +395,7 @@ If set to "y", some operations which are usually now shown to the end user
 are visible, such as CDDB queries. Useful for initial debug and if your
 network/CDDB server is slow.
 .SH EXAMPLES
-Possible ways one can call abcde
+Possible ways one can call abcde—
 .TP
 .B abcde
 Will work in most systems
