@@ -11,7 +11,7 @@
 # Copyright for this work is to expire January 1, 2010, after which it
 # shall be public domain.
 
-VERSION="2.3.99"
+VERSION="2.3.3"
 
 usage ()
 {
@@ -48,8 +48,6 @@ echo "-P     Use UNIX pipes to read+encode without wav files"
 echo "-r <host1[,host2]...>"
 echo "       Also encode on these remote hosts"
 echo "-R     Add replaygain values to the tag info (only for vorbis,flac)"
-echo "-s <field>"
-echo "       Show dielfs from the CDDB info (year,genre)"
 echo "-S <#> Set the CD speed"
 #echo "-t    File types to preprocess (wav)"
 #echo "-T    Set postprocessing options"
@@ -158,31 +156,6 @@ checkerrors ()
 	else
 		# affirmative, we had a negative...
 		return 0
-	fi
-}
-
-# page [file]
-# Finds the right pager in the system to display a file
-page ()
-{
-	PAGEFILE="$1"
-	# Use the debian sensible-pager wrapper to pick the pager
-	# user has requested via their $PAGER environment variable
-	if [ -x "/usr/bin/sensible-pager" ]; then
-		/usr/bin/sensible-pager "$PAGEFILE"
-	elif [ -x "$PAGER" ]; then
-		# That failed, try to load the preferred editor, starting
-		# with their PAGER variable
-		$PAGER "$PAGEFILE"
-		# If that fails, check for less
-	elif [ -x /usr/bin/less ]; then
-		/usr/bin/less -f "$PAGEFILE"
-		# more should be on all UNIX systems
-	elif [ -x /bin/more ]; then
-		/bin/more "$PAGEFILE"
-	else
-		# No bananas, just cat the thing
-		cat "$PAGEFILE" >&2
 	fi
 }
 
@@ -327,7 +300,7 @@ splitvarious ()
 			TRACKNAME=$(echo "$DTITLEARTIST" | cut -f1 -d~)
 			;;
 		esac
-	elif [ "$ONETRACK" = "y" ]; then
+	elif [ "$VARIOUSARTISTS" = "y" ] && [ "$ONETRACK" = "y" ]; then
 		TRACKARTIST="Various"
 	else
 		TRACKARTIST="$DARTIST"
@@ -651,7 +624,7 @@ do_encode ()
 				TEMPARG="PIPE_$MPPENCODER"
 				;;
 		esac
-		IN=${!TEMPARG}
+		IN="$( eval echo "\$$TEMPARG" )"
 	else
 		IN="$ABCDETEMPDIR/track$1.wav"
 		case "$OUTPUT" in
@@ -987,22 +960,20 @@ do_move ()
 		# TRACKFILE, and TRACKNUM.
 		if [ "$VARIOUSARTISTS" = "y" ]; then
 			OUTPUTFILE=$(eval echo $VAOUTPUTFORMAT)
-			else
+		else
 			OUTPUTFILE=$(eval echo $OUTPUTFORMAT)
 		fi
 		# Check that the directory for OUTPUTFILE exists, if it doesn't, create it
 		OUTPUTFILEDIR=$(dirname "$OUTPUTDIR/$OUTPUTFILE")
 		# mkdir -p shouldn't return an error if the directory already exists
 		mkdir -p "$OUTPUTFILEDIR"
-		# Silence the Moving output since it overlaps with encoding processes...
-		#run_command '' vecho "Moving track$1.$OUTPUT to $OUTPUTDIR/$OUTPUTFILE.$OUTPUT"
+		vecho "Moving $ABCDETEMPDIR/track$1.$OUTPUT to $OUTPUTDIR/$OUTPUTFILE.$OUTPUT"
 		run_command movetrack-$1 mv "$ABCDETEMPDIR/track$1.$OUTPUT" "$OUTPUTDIR/$OUTPUTFILE.$OUTPUT"
 		# Lets move the cue file
 		if CUEFILE=$(checkstatus cuefile) >/dev/null ; then 
 			if [ -r "$ABCDETEMPDIR/$CUEFILE" ]; then
 				if checkstatus movecue-$OUTPUT; then :; else
-					# Silence the Copying output since it overlaps with encoding processes...
-					#run_command '' vecho "Copying cue file to its destination directory..."
+					vecho "Copying cue file to its destination directory..."
 					if checkstatus onetrack >/dev/null ; then
 						case $OUTPUT in
 							# NOTE: Creating a cue file with the 3-char-extension files is to comply with
@@ -1360,18 +1331,6 @@ do_cddbparse ()
 		vecho "ONETRACK mode selected: displaying only the title of the CD..."
 	fi
 	echo "---- $(grep DTITLE "${CDDBPARSEFILE}" | cut '-d=' -f2- | tr -d \\r\\n ) ----"
-	if [ X"$SHOWCDDBYEAR" = "Xy" ]; then
-		PARSEDYEAR=$(grep DYEAR "${CDDBPARSEFILE}" | cut '-d=' -f2-)
-		if [ ! X"$PARSEDYEAR" = "X" ]; then
-			echo "Year: $PARSEDYEAR"
-		fi
-	fi
-	if [ X"$SHOWCDDBGENRE" = "Xy" ]; then
-		PARSEDGENRE=$(grep DGENRE "${CDDBPARSEFILE}" | cut '-d=' -f2-)
-		if [ ! X"$PARSEDGENRE" = "X" ]; then
-			echo "Genre: $PARSEDGENRE"
-		fi
-	fi
 	if [ ! "$ONETRACK" = "y" ]; then
 		for TRACK in $(f_seq_row 1 $TRACKS)
 		do
@@ -1625,52 +1584,40 @@ do_cddbedit ()
 				else
 					# The user has a choice to make, display the info in a pager if necessary
 					if [ $(cat "$ABCDETEMPDIR/cddbchoices" | wc -l) -ge 24 ]; then
-						page "$ABCDETEMPDIR/cddbchoices"
+						# Use the debian sensible-pager wrapper to pick the pager
+						# user has requested via their $PAGER environment variable
+						if [ -x "/usr/bin/sensible-pager" ]; then
+							/usr/bin/sensible-pager "$ABCDETEMPDIR/cddbchoices"
+						elif [ -x "$PAGER" ]; then
+							# That failed, try to load the preferred editor, starting
+							# with their PAGER variable
+							$PAGER "$ABCDETEMPDIR/cddbchoices"
+							# If that fails, check for less
+						elif [ -x /usr/bin/less ]; then
+							/usr/bin/less -f "$ABCDETEMPDIR/cddbchoices"
+							# more should be on all UNIX systems
+						elif [ -x /bin/more ]; then
+							/bin/more "$ABCDETEMPDIR/cddbchoices"
+						else
+							# No bananas, just cat the thing
+							cat "$ABCDETEMPDIR/cddbchoices" >&2
+						fi
 					else
 						# It's all going to fit in one page, cat it
 						cat "$ABCDETEMPDIR/cddbchoices" >&2
 					fi
 					
-					CDDBCHOICENUM=""
-					# Setting the choice to an impossible integer to avoid errors in the numeric comparisons
-					CDCHOICENUM=-1
 					# I'll take CDDB read #3 for $400, Alex
-					while [ $CDCHOICENUM -lt 0 ] || [ $CDCHOICENUM -gt $CDDBCHOICES ]; do
-						echo -n "Which entry would you like abcde to use (0 for none)? [0-$CDDBCHOICES]: " >&2
+					echo -n "Which entry would you like abcde to use (0 for none)? [0-$CDDBCHOICES]: " >&2
+					read CDDBCHOICE
+					[ X"$CDDBCHOICE" = "X" ] && CDDBCHOICE=1
+					# Make sure we get a valid choice
+					CDCHOICENUM=$(echo $CDDBCHOICE | xargs printf %d 2>/dev/null)
+				        while [ $CDCHOICENUM -lt 0 ] || [ $CDCHOICENUM -gt $CDDBCHOICES ]; do
+						echo "Invalid selection. Please choose a number between 1 and $CDDBCHOICES." >&2
+						echo -n "Selection [0-$CDDBCHOICES]: " >&2
 						read CDDBCHOICE
-						[ X"$CDDBCHOICE" = "X" ] && CDDBCHOICE=1
-						if echo $CDDBCHOICE | egrep -q "[[:digit:]]+,[[:digit:]]+" ; then
-							if [ ! X"$DIFF" = "X" ]; then
-								PARSECHOICE1=$(echo $CDDBCHOICE | cut -d"," -f1)
-								PARSECHOICE2=$(echo $CDDBCHOICE | cut -d"," -f2)
-								if [ $PARSECHOICE1 -lt 1 ] || [ $PARSECHOICE1 -gt $CDDBCHOICES ] || \
-								   [ $PARSECHOICE2 -lt 1 ] || [ $PARSECHOICE2 -gt $CDDBCHOICES ] || \
-								   [ $PARSECHOICE1 -eq $PARSECHOICE2 ]; then 
-									echo "Invalid diff range. Please select two coma-separated numbers between 1 and $CDDBCHOICES" >&2
-								else
-
-									# We parse the 2 choices to diff, store them in temporary files and diff them.
-									for PARSECHOICE in $(echo $CDDBCHOICE | tr , \ ); do
-										do_cddbparse "$ABCDETEMPDIR/cddbread.$PARSECHOICE" > "$ABCDETEMPDIR/cddbread.parsechoice.$PARSECHOICE"
-									done
-									echo "Showing diff between choices $PARSECHOICE1 and $PARSECHOICE2..." > "$ABCDETEMPDIR/cddbread.diff"
-									$DIFF $DIFFOPTS "$ABCDETEMPDIR/cddbread.parsechoice.$PARSECHOICE1" "$ABCDETEMPDIR/cddbread.parsechoice.$PARSECHOICE2" >> "$ABCDETEMPDIR/cddbread.diff"
-									if [ $(cat "$ABCDETEMPDIR/cddbread.diff" | wc -l) -ge 24 ]; then
-										page "$ABCDETEMPDIR/cddbread.diff"
-									else
-										cat "$ABCDETEMPDIR/cddbread.diff" >&2
-									fi
-								fi
-							else
-								echo "The diff program was not found in your path. Please choose a number between 0 and $CDDBCHOICES." >&2
-							fi
-						else
-							if [ $CDCHOICENUM -lt 0 ] || [ $CDCHOICENUM -gt $CDDBCHOICES ]; then
-								# Make sure we get a valid choice
-								CDCHOICENUM=$(echo $CDDBCHOICE | xargs printf %d 2>/dev/null)
-								echo "Invalid selection. Please choose a number between 0 and $CDDBCHOICES." >&2
-							fi
-						fi
+						CDCHOICENUM=$(echo $CDDBCHOICE | xargs printf %d 2>/dev/null)
 					done
 					if [ "$CDCHOICENUM" = "0" ]; then
 						vecho "Creating empty CDDB template..."
@@ -1942,7 +1889,7 @@ do_cdread ()
 	CDDBTRACKNUM=$(expr $UTRACKNUM - 1)
 	if [ "$USEPIPES" = "y" ]; then
 		TEMPARG="PIPE_$CDROMREADERSYNTAX"
-		FILEARG="${!TEMPARG}"
+		FILEARG="$( eval echo "\$$TEMPARG" )"
 		REDIR=""
 		PIPE_MESSAGE="and encoding "
 	else
@@ -2093,13 +2040,6 @@ CDDBURL="http://freedb.freedb.org/~cddb/cddb.cgi"
 CDDBSUBMIT=freedb-submit@freedb.org
 CDDBPROTO=5
 HELLOINFO="$(whoami)@$(hostname)"
-CDDBCOPYLOCAL="n"
-CDDBLOCALDIR="$HOME/.cddb"
-CDDBUSELOCAL="n"
-
-# List of fields we parse and show during the CDDB parsing...
-SHOWCDDBFIELDS="year,genre"
-
 INTERACTIVE=y
 CDROMREADERSYNTAX=cdparanoia
 ENCODERSYNTAX=default
@@ -2132,6 +2072,9 @@ VARIOUSARTISTS=n
 VARIOUSARTISTSTYLE=forward
 KEEPWAVS=n
 PADTRACKS=n
+CDDBCOPYLOCAL="n"
+CDDBLOCALDIR="$HOME/.cddb"
+CDDBUSELOCAL="n"
 
 # If using scsi devices, cdda2wav needs a CDROMID, instead of a device node
 # i.e. CDROMID="1,0,0"
@@ -2175,8 +2118,6 @@ NORMALIZE=normalize-audio
 CDSPEED=eject
 VORBISGAIN=vorbisgain
 MKCUE=mkcue
-MKTOC=cdrdao
-DIFF=diff
 
 # Options for programs called from abcde
 # mp3
@@ -2209,7 +2150,6 @@ NORMALIZEOPTS=
 CDSPEEDOPTS="-x"
 CDSPEEDVALUE=
 MKCUEOPTS=
-MKTOCOPTS=""
 VORBISCOMMENTOPTS="-R"
 METAFLACOPTS="--no-utf8-convert"
 
@@ -2295,8 +2235,8 @@ if [ "$CDROM" = "" ] ; then
 fi
 
 # Parse command line options
-#while getopts 1a:A:bc:C:d:Dehj:klLmMnNo:pPr:Rs:S:t:T:vVxw:W: opt ; do
-while getopts 1a:bc:C:d:Dehj:klLmMnNo:pPr:Rs:S:t:T:vVxw:W: opt ; do
+#while getopts 1a:bc:C:d:Dhj:klLnNo:pr:S:t:T:vVx opt ; do
+while getopts 1a:bc:C:d:Dehj:klLmMnNo:pPr:RS:t:T:vVxw:W: opt ; do
 	case "$opt" in
 		1) ONETRACK=y ;;
 		a) ACTIONS="$OPTARG" ;;
@@ -2324,7 +2264,6 @@ while getopts 1a:bc:C:d:Dehj:klLmMnNo:pPr:Rs:S:t:T:vVxw:W: opt ; do
 		P) USEPIPES=y ;;
 		r) REMOTEHOSTS="$OPTARG" ;;
 		R) REPLAYGAIN=y ;;
-		s) SHOWCDDBFIELDS="$OPTARG" ;;
 		S) CDSPEEDVALUE="$OPTARG" ;;
 #		t) PREPROCESSFORMATS="$OPTARG"
 #		   PREPROCESS=y ;;
@@ -2418,15 +2357,25 @@ do
 	esac
 done
 
-for SHOWCDDBFIELD in $(echo $SHOWCDDBFIELDS | tr , \ ); do
-	case $SHOWCDDBFIELD in
-		y*|Y*) SHOWCDDBYEAR="y";;
-		g*|G*) SHOWCDDBGENRE="y";;
-		*) ;;
-	esac
-done
-
 # Sanity checks:
+
+# Check the encoding format, if nothing has been configured in the system, from the ones available in the system
+if [ X"$OUTPUTTYPE" = "X" ]; then
+	for DEFAULT_OUTPUT in $( echo "$DEFAULT_OUTPUT_BINARIES" | tr , \ ); do
+		DEFAULT_OUTPUT_FORMAT="$(echo $DEFAULT_OUTPUT | cut -d ":" -f 1)"
+		DEFAULT_OUTPUT_BINARY="$(echo $DEFAULT_OUTPUT | cut -d ":" -f 2)"
+		if which $DEFAULT_OUTPUT_BINARY > /dev/null 2>&1 ; then
+			OUTPUTTYPE=$DEFAULT_OUTPUT_FORMAT
+			vecho "No default output type defined. Autoselecting $OUTPUTTYPE..." >&2
+			break
+		fi
+	done
+	if [ X"$OUTPUTTYPE" = "X" ]; then
+		echo "abcde error: no encoder found in the PATH" >&2
+		echo "hits: are all dependencies installed? has the \$PATH been modified?" >&2
+		exit 1
+	fi
+fi
 
 # At this point a CDROM has to be defined, so we check it exists.
 if [ X"$CDROM" != "X" ] ; then 
@@ -2470,24 +2419,6 @@ if [ X"$USEPIPES" = "Xy" ]; then
 	fi
 	if [ X"$LOWDISK" = "Xy" ]; then
 		vecho "abcde error: Unix pipes not compatible with lowdisk algorithm"
-		exit 1
-	fi
-fi
-
-# Check the encoding format from the ones available in the system, if nothing has been configured in the system.
-if [ X"$OUTPUTTYPE" = "X" ]; then
-	for DEFAULT_OUTPUT in $( echo "$DEFAULT_OUTPUT_BINARIES" | tr , \ ); do
-		DEFAULT_OUTPUT_FORMAT="$(echo $DEFAULT_OUTPUT | cut -d ":" -f 1)"
-		DEFAULT_OUTPUT_BINARY="$(echo $DEFAULT_OUTPUT | cut -d ":" -f 2)"
-		if [ -x $(which $DEFAULT_OUTPUT_BINARY) ] ; then
-			OUTPUTTYPE=$DEFAULT_OUTPUT_FORMAT
-			vecho "No default output type defined. Autoselecting $OUTPUTTYPE..." >&2
-			break
-		fi
-	done
-	if [ X"$OUTPUTTYPE" = "X" ]; then
-		echo "abcde error: no encoder found in the PATH" >&2
-		echo "hits: are all dependencies installed? has the \$PATH been modified?" >&2
 		exit 1
 	fi
 fi
@@ -2725,13 +2656,13 @@ if [ "$USEPIPES" = "y" ]; then
 		mpc)
 			PIPEENCODERSVARCHECK="PIPE_$MPPENCODER" ;;
 	esac
-	if [ ! -n "${!PIPERIPPERSVARCHECK}" ] ; then
+	if [ ! -n "$( eval echo "\$$PIPERIPPERSVARCHECK" )" ] ; then
 		echo "abcde error: no support for pipes with given ripper" >&2
 		echo "read the USEPIPES file from the source tarball to help" >&2
 		echo "on a Debian system, read /usr/share/doc/abcde/USEPIPES.gz" >&2
 		exit 1;
 	fi
-	if [ ! -n "${!PIPEENCODERSVARCHECK}" ] ; then
+	if [ ! -n "$( eval echo "\$$PIPEENCODERSVARCHECK" )" ] ; then
 		echo "abcde error: no support for pipes with given encoder" >&2
 		echo "read the USEPIPES file from the source tarball to help" >&2
 		echo "on a Debian system, read /usr/share/doc/abcde/USEPIPES.gz" >&2
@@ -2763,15 +2694,9 @@ CDROMREADER="$CDROMREADER $CDROMREADEROPTS"
 CDDBTOOL="$CDDBTOOL $CDDBTOOLOPTS"
 HTTPGET="$HTTPGET $HTTPGETOPTS"
 
-# And last but not least, check if we can diff between files
-if [ -x $(which $DIFF) ]; then :; else
-	vecho "[WAR] Disabling diff since we cannot find it in the \$PATH..."
-	DIFF=""
-fi
-
 # Here it used to say:
 # One thousand lines in, we can start doing stuff with things
-# Well, right now we are at line 2736 ;)
+# Well, right now we are at line 2157 ;)
 
 # Export needed things so they can be read in this subshell
 export CDDBTOOL ABCDETEMPDIR TRACKQUEUE LOWDISK EJECTCD EJECT EJECTOPTS
