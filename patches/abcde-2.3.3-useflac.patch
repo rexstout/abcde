@@ -1,0 +1,102 @@
+--- abcde-2.3.3/abcde.useflac	2005-08-31 01:42:59.000000000 -0700
++++ abcde-2.3.3/abcde	2005-08-31 01:42:59.000000000 -0700
+@@ -1103,9 +1103,13 @@
+ 		if [ "$OSFLAVOUR" = "OSX" ]; then
+ 			disktool -u ${CDROM#/dev/}
+ 		fi
+-		TRACKINFO=$($CDDISCID $CDROM)
++		if [ "$CDROMREADERSYNTAX" = "flac" ] ; then
++			TRACKINFO=$($METAFLAC $METAFLACOPTS --export-cuesheet-to=- $CDROM | cue2discid)
++		else
++			TRACKINFO=$($CDDISCID $CDROM)
++		fi
+ 		# Make sure there's a CD in there by checking cd-discid's return code
+-		if [ "$?" = "1" ]; then
++ 		if [ "$?" != "0" ]; then
+ 			echo "abcde error: CD could not be read. Perhaps there's no CD in the drive?" >&2
+ 			exit 1
+ 		fi
+@@ -1878,6 +1882,7 @@
+ 		LASTTRACK=$3
+ 		UTRACKNUM=$FIRSTTRACK
+ 		case "$CDROMREADERSYNTAX" in
++			flac) READTRACKNUMS="$FIRSTTRACK.1-$((10#$LASTTRACK + 1)).0" ;;
+ 			cdparanoia) READTRACKNUMS="$FIRSTTRACK-$LASTTRACK" ;;
+ 			cdda2wav) READTRACKNUMS="$FIRSTTRACK+$LASTRACK" ;;
+ 			*) echo "abcde error: $CDROMREADERSYNTAX does not support ONETRACK mode"
+@@ -1895,7 +1900,10 @@
+ 	else
+ 		WAVDATA="$ABCDETEMPDIR/track$UTRACKNUM.wav"
+ 		case "$CDROMREADERSYNTAX" in
+-		## FIXME ## Find the case for dagrab, to avoid exceptions
++		## FIXME ## Find the case for dagrab and flac, to avoid exceptions
++			flac)
++				FILEARG="-o $WAVDATA"
++				;;
+ 			dagrab)
+ 				FILEARG="-f $WAVDATA"
+ 				;;
+@@ -1916,6 +1924,10 @@
+ 		fi
+ 	fi
+ 	case "$CDROMREADERSYNTAX" in
++		## FIXME ## We have an exception for flac, since it uses -o
++		flac)
++			nice $READNICE $FLAC -d --cue=${READTRACKNUMS:-$UTRACKNUM.1-$((10#$UTRACKNUM + 1)).0} "$FILEARG" "$CDROM" $REDIR
++			;;
+ 		cdparanoia) 
+ 			nice $READNICE $CDROMREADER -$CDPARANOIACDROMBUS $CDROM ${READTRACKNUMS:-$UTRACKNUM} "$FILEARG" $REDIR ;;
+ 		cdda2wav)
+@@ -2292,10 +2304,16 @@
+ 
+ shift $(($OPTIND - 1))
+ 
++# If the user specified a flac file, then switch to special flac mode
++if echo $CDROM | grep -q '.flac$'; then
++	CDROMREADERSYNTAX=flac
++fi
++
+ # Decide if we can continue.
+ if [ "$ONETRACK" = "y" ]; then 
+ 	# FIXME # remove check as soon as we find out about the other readers
+ 	case "$CDROMREADERSYNTAX" in
++		flac) ;;
+ 		cdparanoia) ;;
+ 		cdda2wav) ;;
+ 		*) echo "abcde error: $CDROMREADERSYNTAX does not support ONETRACK mode"
+@@ -2440,6 +2458,10 @@
+ 	cddafs)
+ 		CDROMREADER="$CDDAFS"
+ 		CDROMREADEROPTS="$CDDAFSOPTS"
++                ;;
++	flac)
++		CDROMREADER="$FLAC"
++		CDROMREADEROPTS="$FLACOPTS"
+ 		;;
+ esac
+ 
+@@ -2626,6 +2648,7 @@
+ if [ X"$CDSPEEDVALUE" != "X" ]; then
+ 	case "$CDROMREADERSYNTAX" in
+ 		cdparanoia|debug) CDROMREADEROPTS="$CDPARANOIAOPTS -S $CDSPEEDVALUE" ;;
++        flac) NEEDMETAFLAC=y ;;
+ 		*) NEEDCDSPEED=y ;;
+ 	esac
+ fi
+@@ -2633,6 +2656,7 @@
+ # Rippers with USEPIPE support
+ # FIXME # Include here all the rippers we can figure out support pipes
+ PIPE_cdparanoia="-"
++PIPE_flac="-c"
+ 
+ # Encoders with USEPIPE support
+ # FIXME # Include here all the encoders we can figure out support pipes
+@@ -2735,7 +2759,7 @@
+ 
+ if [ X"$CDSPEEDVALUE" != "X" ]; then
+ 	case "$CDROMREADERSYNTAX" in
+-		cdparanoia|debug) : ;;
++		cdparanoia|flac|debug) : ;;
+ 		*) do_cdspeed ;;
+ 	esac
+ fi
