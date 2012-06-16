@@ -13,7 +13,7 @@
 #
 # $Id$
 
-VERSION='2.5.3-UNRELEASED'
+VERSION='2.5.2'
 
 usage ()
 {
@@ -43,11 +43,11 @@ echo "-j <#> Number of encoder processes to run at once (localhost)"
 echo "-k     Keep the wav tracks for later use"
 echo "-l     Use low disk space algorithm"
 echo "-L     Use local CDDB storage directory"
+echo "-n     No lookup. Don't query CDDB, just create and use template"
+echo "-N     Noninteractive. Never prompt for anything"
 echo "-m     Modify playlist to include CRLF endings, to comply with some players"
 #echo "       WARNING: Deprecated. Use \"cue\" action"
 #echo "-M     Create a CUE file"
-echo "-n     No lookup. Don't query CDDB, just create and use template"
-echo "-N     Noninteractive. Never prompt for anything"
 echo "-o <type1[,type2]...>"
 echo "       Output file type(s) (vorbis,mp3,flac,spx,mpc,wav,m4a). Defaults to vorbis"
 echo "-p     Pad track numbers with 0's (if less than 10 tracks)"
@@ -56,6 +56,7 @@ echo "-q <level>"
 echo "       Set quality level (high,medium,low)"
 echo "-r <host1[,host2]...>"
 echo "       Also encode on these remote hosts"
+echo "-R     Use local CDDB in recursive mode"
 echo "-s <field>"
 echo "       Show fields from the CDDB info (year,genre)"
 echo "-S <#> Set the CD speed"
@@ -95,7 +96,7 @@ log ()
 	esac
 }
 
-# Functions to replace the need of seq, which is too distribution dependent.
+# Funtions to replace the need of seq, which is too distribution dependant.
 f_seq_row ()
 {
 	i=$1
@@ -937,7 +938,7 @@ do_tag ()
 			fi
 
 			#It has to be command file opts for AtomicParsley
-			run_command tagtrack-$OUTPUT-$1 nice $ENCNICE $ATOMICPARSLEY "$ABCDETEMPDIR/track$1.m4a" --artist "$TRACKARTIST" --album "$DALBUM" --title "$TRACKNAME" --tracknum ${TRACKNUM:-$1} --year "$CDYEAR" --genre "$CDGENRE" --compilation $VARIOUSBOOL --comment "$COMMENTOUTPUT" --output $ATOMICTEMPFILE
+			run_command tagtrack-$OUTPUT-$1 nice $ENCNICE $ATOMICPARSLEY $ABCDETEMPDIR/track$1.m4a --artist "$TRACKARTIST" --album "$DALBUM" --title "$TRACKNAME" --tracknum ${TRACKNUM:-$1} --year "$CDYEAR" --genre "$CDGENRE" --compilation $VARIOUSBOOL --comment "$COMMENTOUTPUT" --output $ATOMICTEMPFILE
 			if [ -f $ATOMICTEMPFILE ]; then
 				mv "$ATOMICTEMPFILE" "$ABCDETEMPDIR/track$1.m4a"
 			fi
@@ -1026,7 +1027,7 @@ do_encode ()
 				TEMPARG="PIPE_$MPPENCODER"
 				;;
 			m4a)
-				TEMPARG="PIPE_$AACENCODERSYNTAX"
+				TEMPARG="PIPE_$MPPENCODER"
 				;;
 		esac
 		IN="$( eval echo "\$$TEMPARG" )"
@@ -1555,7 +1556,7 @@ do_playlist ()
 		## this will convert the playlist to have CRLF line-endings, if specified
 		## (some hardware players insist on CRLF endings)
 		if [ "$DOSPLAYLIST" = "y" ]; then
-			awk '{sub("\r$",""); printf "%s\r\n", $0}' "$OUTPUTDIR/$PLAYLISTFILE" > "$ABCDETEMPDIR/PLAYLISTFILE.tmp"
+			awk '{substr("\r",""); printf "%s\r\n", $0}' "$OUTPUTDIR/$PLAYLISTFILE" > "$ABCDETEMPDIR/PLAYLISTFILE.tmp"
 #			mv -f "$ABCDETEMPDIR/PLAYLISTFILE.tmp" "$OUTPUTDIR/$PLAYLISTFILE"
 			cat "$ABCDETEMPDIR/PLAYLISTFILE.tmp" | sed 's/\//\\/' > "$OUTPUTDIR/$PLAYLISTFILE"
 		fi
@@ -2241,24 +2242,15 @@ do_cdtext ()
 		return 0
 	fi
 
-	if [ "$OSFLAVOUR" = "OSX" ] ; then
-		# Hei, we have to unmount the device before running anything like cdda2wav/icedax in OSX
-		diskutil unmount ${CDROM#/dev/}
-		# Also, in OSX the cdrom device for cdda2wav/icedax changes...
-		CDDA2WAVCDROM="IODVDServices"
-	elif [ "$OSFLAVOUR" = "FBSD" ] ; then
-		CDDA2WAVCDROM="$CDROMID"
+	if [ "$CDROMID" = "" ]; then
+		CDDA2WAVCDROM="$CDROM"
 	else
-		if [ "$CDROMID" = "" ]; then
-			CDDA2WAVCDROM="$CDROM"
-		else
-			CDDA2WAVCDROM="$CDROMID"
-		fi
+		CDDA2WAVCDROM="$CDROMID"
 	fi
 
 	# Do we have CD-Text on the disc (and can the drive read it?)
-	${CDTEXT_READER} -J -N -D ${CDDA2WAVCDROM} > "$ABCDETEMPDIR/cd-text" 2>&1
-	grep -q '^CD-Text: detected' "$ABCDETEMPDIR/cd-text"
+	${CDTEXT_READER} -J -N -D ${CDDA2WAVCDROM} > $ABCDETEMPDIR/cd-text 2>&1
+	grep -q '^CD-Text: detected' $ABCDETEMPDIR/cd-text
 	ERRORCODE=$?
 	if [ $ERRORCODE -ne 0 ]; then
 		# No CD-Text found, bail
@@ -2273,7 +2265,7 @@ do_cdtext ()
 	echo "done." >> "$ABCDETEMPDIR/cddbchoices"
 	echo cddb-read-1-complete >> "$ABCDETEMPDIR/status"
 	echo cddb-choice=1 >> "$ABCDETEMPDIR/status"
-	ATITLE=$(grep -e '^Album title:' "${ABCDETEMPDIR}/cd-text" | cut -c14- )
+	ATITLE=$(grep -e '^Album title:' ${ABCDETEMPDIR}/cd-text | cut -c14- )
 	echo "200 none ${ATITLE}" >> "$ABCDETEMPDIR/cddbquery"
 	# List out disc title/author and contents
 	echo ---- ${ATITLE} ---- >> "$ABCDETEMPDIR/cddbchoices"
@@ -2282,11 +2274,9 @@ do_cdtext ()
 		TRACKM1=$(($TRACK - 1))
 		TITLE="$(grep -E ^Track\ +$TRACK: "$ABCDETEMPDIR/cd-text" | tr -d \\r\\n | sed 's~^Track ..: .~~g;'"s~'$~~g")"
 		echo "$TRACK: $TITLE" >> "$ABCDETEMPDIR/cddbchoices"
-		sed "s~^TTITLE${TRACKM1}=.*~TTITLE${TRACKM1}=${TITLE}~" "$ABCDETEMPDIR/cddbread.1" > "$ABCDETEMPDIR/cddbread.new"
-        mv -f "$ABCDETEMPDIR/cddbread.new" "$ABCDETEMPDIR/cddbread.1"
+		sed -i "s~^TTITLE${TRACKM1}=.*~TTITLE${TRACKM1}=${TITLE}~" $ABCDETEMPDIR/cddbread.1
 	done
-	sed "s~^DTITLE=.*~DTITLE=${ATITLE}~" "$ABCDETEMPDIR/cddbread.1" > "$ABCDETEMPDIR/cddbread.new"
-    mv -f "$ABCDETEMPDIR/cddbread.new" "$ABCDETEMPDIR/cddbread.1"
+	sed -i "s~^DTITLE=.*~DTITLE=${ATITLE}~" $ABCDETEMPDIR/cddbread.1
 	echo >> "$ABCDETEMPDIR/cddbchoices"
 	echo "cdtext-readcomplete" >> "$ABCDETEMPDIR/status"
 }
@@ -2305,11 +2295,27 @@ do_musicbrainz ()
 		rm -f "$ABCDETEMPDIR/cddbchoices"
 		CDDBCHOICES=1 # Overridden by multiple matches
 		MBDISCID=$(echo $TRACKINFO | cut -d' ' -f1)
-		${MUSICBRAINZ} --command data --discid "$MBDISCID" --workdir "$ABCDETEMPDIR"
+		${MUSICBRAINZ} --command data --discid "$MBDISCID" --workdir $ABCDETEMPDIR
 
 		# The helper script will write disc matches out to
 		# cddbread.*. Count how many we have
-		if [ ! -f "${ABCDETEMPDIR}/cddbread.1" ] ; then
+		NUM_RESPONSES=$(echo ${ABCDETEMPDIR}/cddbread.* | wc -w)
+		if [ "$NUM_RESPONSES" -eq 1 ] ; then
+			# One exact match
+			echo -n "Retrieved 1 Musicbrainz match..." >> "$ABCDETEMPDIR/cddbchoices"
+			echo "done." >> "$ABCDETEMPDIR/cddbchoices"
+			echo cddb-read-1-complete >> "$ABCDETEMPDIR/status"
+			echo cddb-choice=1 >> "$ABCDETEMPDIR/status"
+			ATITLE=$(grep -e '^DTITLE=' ${ABCDETEMPDIR}/cddbread.1 | cut -c8- )
+			echo "200 none ${ATITLE}" >> "$ABCDETEMPDIR/cddbquery"
+			# List out disc title/author and contents
+			echo ---- ${ATITLE} ---- >> "$ABCDETEMPDIR/cddbchoices"
+			for TRACK in $(f_seq_row 1 $TRACKS)
+			do
+				echo $TRACK: "$(grep ^TTITLE$(expr $TRACK - 1)= "$ABCDETEMPDIR/cddbread.1" | cut -f2- -d= | tr -d \\r\\n)" >> "$ABCDETEMPDIR/cddbchoices"
+			done
+			echo >> "$ABCDETEMPDIR/cddbchoices"
+		elif [ "$NUM_RESPONSES" -eq 0 ] ; then
 			# No matches. Use the normal cddb template for the user to
 			# fill in
 			echo "No Musicbrainz match." >> "$ABCDETEMPDIR/cddbchoices"
@@ -2326,42 +2332,23 @@ do_musicbrainz ()
 			echo cddb-choice=0 >> "$ABCDETEMPDIR/status"
 			echo 503 > "$ABCDETEMPDIR/cddbquery"
 		else
-			# We have some matches
-			NUM_RESPONSES=$(echo "${ABCDETEMPDIR}"/cddbread.* | wc -w)
-			if [ "$NUM_RESPONSES" -eq 1 ] ; then
-				# One exact match
-				echo -n "Retrieved 1 Musicbrainz match..." >> "$ABCDETEMPDIR/cddbchoices"
-				echo "done." >> "$ABCDETEMPDIR/cddbchoices"
-				echo cddb-read-1-complete >> "$ABCDETEMPDIR/status"
-				echo cddb-choice=1 >> "$ABCDETEMPDIR/status"
-				ATITLE=$(grep -e '^DTITLE=' "${ABCDETEMPDIR}/cddbread.1" | cut -c8- )
-				echo "200 none ${ATITLE}" >> "$ABCDETEMPDIR/cddbquery"
+			echo "210 Found exact matches, list follows (until terminating .)" > "$ABCDETEMPDIR/cddbquery"
+			echo "Multiple Musicbrainz matches:" >> "$ABCDETEMPDIR/cddbchoices"
+			for file in $ABCDETEMPDIR/cddbread.*
+			do
+				X=$(echo $file | sed 's/^.*cddbread\.//g')
+				echo cddb-read-$X-complete >> "$ABCDETEMPDIR/status"
+				ATITLE=$(grep -e '^DTITLE=' ${ABCDETEMPDIR}/cddbread.$X | cut -c8- )
+				echo "none ${ATITLE}" >> "$ABCDETEMPDIR/cddbquery"
 				# List out disc title/author and contents
-				echo ---- ${ATITLE} ---- >> "$ABCDETEMPDIR/cddbchoices"
+				echo "#$X: ---- ${ATITLE} ----" >> "$ABCDETEMPDIR/cddbchoices"
 				for TRACK in $(f_seq_row 1 $TRACKS)
 				do
-					echo $TRACK: "$(grep ^TTITLE$(expr $TRACK - 1)= "$ABCDETEMPDIR/cddbread.1" | cut -f2- -d= | tr -d \\r\\n)" >> "$ABCDETEMPDIR/cddbchoices"
+					echo $TRACK: "$(grep ^TTITLE$(expr $TRACK - 1)= "$ABCDETEMPDIR/cddbread.$X" | cut -f2- -d= | tr -d \\r\\n)" >> "$ABCDETEMPDIR/cddbchoices"
 				done
 				echo >> "$ABCDETEMPDIR/cddbchoices"
-			else
-				echo "210 Found exact matches, list follows (until terminating .)" > "$ABCDETEMPDIR/cddbquery"
-				echo "Multiple Musicbrainz matches:" >> "$ABCDETEMPDIR/cddbchoices"
-				for file in "$ABCDETEMPDIR"/cddbread.*
-				do
-					X=$(echo $file | sed 's/^.*cddbread\.//g')
-					echo cddb-read-$X-complete >> "$ABCDETEMPDIR/status"
-					ATITLE=$(grep -e '^DTITLE=' "${ABCDETEMPDIR}"/cddbread.$X | cut -c8- )
-					echo "none ${ATITLE}" >> "$ABCDETEMPDIR/cddbquery"
-					# List out disc title/author and contents
-					echo "#$X: ---- ${ATITLE} ----" >> "$ABCDETEMPDIR/cddbchoices"
-					for TRACK in $(f_seq_row 1 $TRACKS)
-					do
-						echo $TRACK: "$(grep ^TTITLE$(expr $TRACK - 1)= "$ABCDETEMPDIR/cddbread.$X" | cut -f2- -d= | tr -d \\r\\n)" >> "$ABCDETEMPDIR/cddbchoices"
-					done
-					echo >> "$ABCDETEMPDIR/cddbchoices"
-				done
-				echo "." >> "$ABCDETEMPDIR/cddbquery"
-			fi
+			done
+			echo "." >> "$ABCDETEMPDIR/cddbquery"
 		fi
 		echo "musicbrainz-readcomplete" >> "$ABCDETEMPDIR/status"
 	fi
@@ -2953,7 +2940,7 @@ do_cdread ()
 		cdda2wav | icedax)
 			if [ "$OSFLAVOUR" = "OSX" ] ; then
 				# Hei, we have to unmount the device before running anything like cdda2wav/icedax in OSX
-				diskutil unmount ${CDROM#/dev/}
+				diskutil unmount ${CDROM#/dev/} 0
 				# Also, in OSX the cdrom device for cdda2wav/icedax changes...
 				CDDA2WAVCDROM="IODVDServices"
 			elif [ "$OSFLAVOUR" = "FBSD" ] ; then
@@ -3279,11 +3266,11 @@ MAXPROCS=1
 # List of actions to perform - by default, run to completion
 ACTIONS=cddb,read,encode,tag,move,clean
 
-# This option is basically for Debian package dependencies:
-# List of preferred outputs - by default, run with whatever we have in the path
+# This option is basicaly for Debian package dependencies:
+# List of prefered outputs - by default, run with whatever we have in the path
 DEFAULT_OUTPUT_BINARIES=vorbis:oggenc,flac:flac,mp3:toolame,mp3:lame,mp3:bladeenc,spx:speex,m4a:faac
 
-# List of preferred cdromreaders - by default, run whichever we have in the path
+# List of prefered cdromreaders - by default, run whichever we have in the path
 DEFAULT_CDROMREADERS="cdparanoia icedax cdda2wav"
 
 # List of quality levels associated with the encoders:
@@ -3292,7 +3279,7 @@ DEFAULT_QUALITY_LO="oggenc:-q 1,lame:-q 7,speex:--quality 5,m4a:"
 DEFAULT_QUALITY_HI="oggenc:-q 7,lame:--preset standard,speex:--quality 9,m4a:"
 DEFAULT_QUALITY_XHI="oggenc:-q 10,lame:--preset extreme,speex:--quality 10,m4a:"
 
-# Assume fetch if under FreeBSD. curl is used for Mac OS X. wget is used for
+# Asume fetch if under FreeBSD. curl is used for Mac OS X. wget is used for
 # Linux/OpenBSD. ftp is user for NetBSD.
 # Let's use these checkings to determine the OS flavour, which will be used
 # later
@@ -3604,7 +3591,7 @@ if [ X"$CDROM" != "X" ] ; then
 		if [ "$OSFLAVOUR" = "FBSD" ]; then
 			if echo "$CDROMID" | grep "^[0-9],[0-9],[0-9]$" >/dev/null 2>&1 ; then :; else
 				log error "CDROMID not in the right format for $CDROMREADERSYNTAX"
-				log error "Use \"cdrecord -scanbus\" to obtain an adequate ID and set CDROMID accordingly"
+				log error "Use \"cdrecord -scanbus\" to obtain a adecuate ID an set CDROMID accordingly"
 				exit 1
 			fi
 		fi
@@ -4059,7 +4046,7 @@ if [ "$DOREAD" = "y" ]; then
 	#  - set the CD speed value with eject -x
 	vecho -n "Executing customizable pre-read function... "
 
-	pre_read # Execute the user-defined pre-read function. Close the CD with it.
+	pre_read # Execute the user-defined pre-read funtion. Close the CD with it.
 
 	vecho "done."
 fi
@@ -4214,7 +4201,7 @@ if [ "$NOGAP" = "y" ] || [ "$BATCHNORM" = "y" ] || [ "$ONETRACK" = "y" ]; then
 	echo NEXTTRACK
 fi
 
-# Execute the user-defined post_read function before ejecting CD
+# Execute the user-defined post_read funtion before ejecting CD
 post_read
 
 # We are now finished with the cdrom - it can be safely ejected. Note that
